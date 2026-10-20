@@ -1,0 +1,129 @@
+# container-schedule
+
+A minimal Go scheduler for Libation: start an existing container every four hours,
+leave it to finish, and skip starts while it is running. This project is not a
+full Ofelia replacement. The Go module is `github.com/jacobfg/container-schedule`;
+the executable and local image are named `container-scheduler`.
+
+## Build and check
+
+Requires Go 1.27.1 or newer.
+
+```sh
+go test -race ./...
+go vet ./...
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/container-scheduler-linux-amd64 ./cmd/container-scheduler
+docker build -t container-scheduler:local .
+```
+
+The runtime image is non-root, contains the static binary and CA certificates,
+and needs no writable filesystem. Docker integration has not been run locally;
+the development environment has no Docker executable.
+
+## Configuration
+
+| Environment | Value |
+| --- | --- |
+| `CONTAINER_LABEL_SELECTOR` | Required single `key=value` Docker discovery filter |
+| `LABEL_PREFIX` | `ofelia` by default; selects one label namespace |
+| `DOCKER_HOST` | Docker SDK default Unix socket, or `tcp://scheduler-socket-proxy:2375` |
+| `DOCKER_API_TIMEOUT` | `15s`; positive duration, total bound per scheduled inspect/start operation |
+
+Docker SDK environment settings also support TLS and API version overrides.
+API negotiation is enabled by the SDK by default. JSON logs go to stdout.
+
+Place these labels on a container matching the discovery selector (the scheduler
+itself in the example):
+
+```yaml
+container-scheduler.scope: libation
+ofelia.enabled: 'true'
+ofelia.service: 'true'
+ofelia.job-run.libation.schedule: '@every 4h'
+ofelia.job-run.libation.container: libation
+ofelia.job-run.libation.no-overlap: 'true'
+ofelia.job-run.libation.delete: 'false'
+```
+
+All four job fields are required. `service` is accepted for compatibility and
+has no behavior. Disabled/unmarked containers are ignored. Enabled containers
+with unsupported labels, invalid jobs, duplicate target containers, or an empty
+job set cause a nonzero startup exit. Only positive Go durations after `@every `
+are accepted (for example `4h`, `30m`, `1h30m`; not `1d`). Cron and job-exec are
+not supported.
+
+Discovery occurs once at startup. Restart the scheduler after changing labels.
+The first tick occurs one full interval after discovery. Restarting resets that
+interval; downtime is not replayed. Elapsed ticks are discarded, with subsequent
+ticks aligned to the original interval. This is interval scheduling, not six
+fixed local-clock times per calendar day.
+
+Every tick inspects the target by name and starts it by name if stopped. Running,
+restarting, or paused containers are skipped. Missing containers and Docker API
+failures are logged and retried at the next interval. Startup discovery failures
+exit nonzero so the deployment restart policy retries. A start timeout can mean
+Docker accepted the request; the next tick inspects state again. No container
+output, exit status, deletion, exec, stop, or creation is managed here.
+
+Run one scheduler instance and avoid other schedulers managing the same target.
+Inspect/start is not a distributed lock. SIGTERM cancels API requests and timers
+without stopping target containers. The scheduler does not report job completion.
+
+## Compose integration
+
+`compose/scheduler.yml` is an example module, not a live migration. Include it
+from the root Compose project and declare:
+
+```yaml
+networks:
+  scheduler_socket_proxy:
+    internal: true
+```
+
+Build `container-scheduler:local` on the Docker host first. Preserve Libation's
+existing `scheduled` profile, `restart: "no"`, `SLEEP_TIME=-1`, user, mounts, and
+resource limits. Prepare it without running it before starting the scheduler:
+
+```sh
+docker compose --profile scheduled up --no-start --no-deps libation
+docker compose up -d scheduler-socket-proxy scheduler
+```
+
+The proxy permits listing containers, inspecting Libation, negotiating the API,
+and starting only `libation`. It denies exec/create/stop/delete and log streaming.
+The discovery selector controls job selection; the proxy enforces write access.
+`:ro` on the host socket does not itself restrict Docker API writes.
+The example retains the existing pinned proxy image. Memory ceilings are initial
+values to validate on the host, not measured production requirements.
+
+For the later homeserver migration, stop the old Ofelia instance before enabling
+this scheduler. Update deployment helpers to pause `scheduler` before checking
+Libation and restore only a previously running scheduler on failure. On the
+first migration also stop legacy Ofelia explicitly: the new Compose model will
+no longer know its service. Defer migration if Libation is running. Remove legacy
+services only after successful handover. The homeserver repo is unchanged here.
+
+## Manual Docker smoke tests
+
+Use a disposable Docker host/project with a test container named `libation`;
+do not run these tests against the real library.
+
+1. Create (do not start) an Alpine container named `libation` whose command prints
+   a marker, sleeps 15 seconds, then exits, with restart disabled.
+2. Include the example module in a temporary root Compose project and declare
+   its internal network. Override the scheduler's schedule label to `@every 10s`.
+3. Build the image and start proxy and scheduler. Confirm no immediate start,
+   a start after 10 seconds, a skip while running, and another start after exit.
+4. Stop the scheduler during the sleep. Confirm the target finishes naturally.
+   Restart the scheduler and confirm the full initial delay returns.
+5. Between ticks, remove the stopped test target and create another container
+   with the same name. Confirm it is discovered by name on the next tick.
+6. Stop the proxy for a tick, then restore it. Confirm an error is logged and a
+   later tick recovers. A missing target should likewise recover once recreated.
+7. Verify proxy logs show no denied legitimate requests and attempt forbidden
+   create/exec/delete/start-other-container requests through the proxy; expect denial.
+8. Restore `@every 4h` for deployment. Observe memory and restart counts through
+   several real cycles before treating the image as production-ready.
+
+Image publishing, release CI, and full Ofelia compatibility are outside the
+initial scope.
