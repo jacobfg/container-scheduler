@@ -1,5 +1,7 @@
 """Disposable Docker integration test; never targets the real Libation container."""
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import subprocess
 import tempfile
 import time
@@ -29,6 +31,7 @@ def main():
         # Reuse the production proxy ACLs and hardening; isolate all names.
         module = (ROOT / 'compose/scheduler.yml').read_text().replace('libation', TARGET)
         module = module.replace('@every 4h', '@every 4s')
+        module = module.replace('${TZ:-UTC}', 'Australia/Sydney')
         path = Path(tmp) / 'compose.yml'
         path.write_text(module + '\nnetworks:\n  scheduler_socket_proxy:\n    internal: true\n')
 
@@ -52,6 +55,12 @@ def main():
             compose('up', '-d')
             wait_for(lambda: 'job scheduled' in logs(), 'job discovery')
             assert not running(), 'Started before first interval'
+            record = next(json.loads(line[line.index('{'):]) for line in logs().splitlines()
+                          if 'job scheduled' in line)
+            for field in ('time', 'next'):
+                stamp = datetime.fromisoformat(record[field])
+                expected = stamp.astimezone(ZoneInfo('Australia/Sydney'))
+                assert stamp.utcoffset() == expected.utcoffset(), (field, record[field])
             wait_for(running, 'first scheduled start')
             wait_for(lambda: 'skipped running container' in logs(), 'overlap skip')
             compose('stop', 'scheduler')

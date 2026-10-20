@@ -11,6 +11,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	// The scratch runtime has no system timezone database.
+	_ "time/tzdata"
 )
 
 func main() {

@@ -25,12 +25,17 @@ It uses isolated container names and exercises the restricted proxy.
 | Environment | Value |
 | --- | --- |
 | `CONTAINER_LABEL_SELECTOR` | Required single `key=value` Docker discovery filter |
+| `TZ` | Log timezone, e.g. `Australia/Sydney`; defaults to UTC in the image |
 | `LABEL_PREFIX` | `ofelia` by default; selects one label namespace |
 | `DOCKER_HOST` | Docker SDK default Unix socket, or `tcp://scheduler-socket-proxy:2375` |
 | `DOCKER_API_TIMEOUT` | `15s`; positive duration, total bound per scheduled inspect/start operation |
 
 Docker SDK environment settings also support TLS and API version overrides.
 API negotiation is enabled by the SDK by default. JSON logs go to stdout.
+Timezone data is embedded in the binary, so IANA names work in the scratch image
+without host mounts. Log timestamps and next-run timestamps honour `TZ`, including
+daylight saving. Invalid timezone names fall back to UTC. Interval scheduling
+remains elapsed-time based; changing `TZ` does not change the four-hour interval.
 
 Place these labels on a container matching the discovery selector (the scheduler
 itself in the example):

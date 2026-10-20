@@ -9,6 +9,7 @@ services:
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     environment:
+      TZ: ${TZ:-UTC}
       DOCKER_HOST: tcp://scheduler-socket-proxy:2375
       DOCKER_API_TIMEOUT: 15s
       CONTAINER_LABEL_SELECTOR: container-scheduler.scope=libation
