@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     user: '65532:65532'
     read_only: true
+    tmpfs:
+      - /run/container-scheduler:uid=65532,gid=65532,mode=0700,size=1m
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
     environment:

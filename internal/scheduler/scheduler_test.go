@@ -155,7 +155,7 @@ func TestTimingAndCancellation(t *testing.T) {
 		f := &fake{}
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
-		go func() { Run(ctx, f, Job{"libation", "libation", 4 * time.Hour}, time.Second, quiet); close(done) }()
+		go func() { Run(ctx, f, Job{"libation", "libation", 4 * time.Hour}, time.Second, quiet, nil); close(done) }()
 		synctest.Wait()
 		time.Sleep(4*time.Hour - time.Second)
 		synctest.Wait()
@@ -201,5 +201,94 @@ func TestDiscovery(t *testing.T) {
 	}
 	if _, err := Discover(context.Background(), &fake{}, "scope=libation", "ofelia", time.Second); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestManualRunResetsCadence(t *testing.T) {
+	for _, scenario := range []string{"stopped", "running", "offline"} {
+		t.Run(scenario, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				f := &fake{running: scenario == "running"}
+				if scenario == "offline" {
+					f.inspectErr = errors.New("offline")
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				trigger := make(chan struct{}, 1)
+				done := make(chan struct{})
+				go func() {
+					Run(ctx, f, Job{"libation", "libation", 4 * time.Hour}, time.Second, quiet, trigger)
+					close(done)
+				}()
+				synctest.Wait()
+				time.Sleep(time.Hour)
+				trigger <- struct{}{}
+				synctest.Wait()
+				want := 0
+				if scenario == "stopped" {
+					want = 1
+				}
+				if f.count() != want {
+					t.Fatalf("manual starts=%d, want %d", f.count(), want)
+				}
+				f.mu.Lock()
+				f.running = false
+				f.inspectErr = nil
+				f.mu.Unlock()
+				time.Sleep(3 * time.Hour)
+				synctest.Wait()
+				if f.count() != want {
+					t.Fatal("old deadline was not cancelled")
+				}
+				time.Sleep(time.Hour)
+				synctest.Wait()
+				if f.count() != want+1 {
+					t.Fatal("missing run four hours after manual request")
+				}
+				cancel()
+				<-done
+			})
+		})
+	}
+}
+
+func TestManualRunLeavesOtherJobTimerUnchanged(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		first, second := &fake{}, &fake{}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		trigger := make(chan struct{}, 1)
+		var workers sync.WaitGroup
+		workers.Go(func() { Run(ctx, first, Job{"libation", "libation", 4 * time.Hour}, time.Second, quiet, trigger) })
+		workers.Go(func() { Run(ctx, second, Job{"backup", "backup", 4 * time.Hour}, time.Second, quiet, nil) })
+		synctest.Wait()
+		time.Sleep(time.Hour)
+		trigger <- struct{}{}
+		synctest.Wait()
+		if first.count() != 1 || second.count() != 0 {
+			t.Fatal("manual request affected wrong job")
+		}
+		first.mu.Lock()
+		first.running = false
+		first.mu.Unlock()
+		time.Sleep(3 * time.Hour)
+		synctest.Wait()
+		if first.count() != 1 || second.count() != 1 {
+			t.Fatal("unrelated job cadence changed")
+		}
+		time.Sleep(time.Hour)
+		synctest.Wait()
+		if first.count() != 2 || second.count() != 1 {
+			t.Fatal("target cadence was not reset")
+		}
+		cancel()
+		workers.Wait()
+	})
+}
+func TestDuplicateJobNames(t *testing.T) {
+	a, b := valid(), valid()
+	b["ofelia.job-run.libation.container"] = "backup"
+	if _, err := Parse([]map[string]string{a, b}, "ofelia"); err == nil {
+		t.Fatal("duplicate job names accepted")
 	}
 }

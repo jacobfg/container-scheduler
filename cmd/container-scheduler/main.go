@@ -17,6 +17,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		if err := runCommand(context.Background(), os.Args[1:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -26,6 +33,8 @@ func main() {
 	}
 }
 func run(ctx context.Context, log *slog.Logger) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	prefix := os.Getenv("LABEL_PREFIX")
 	if prefix == "" {
 		prefix = "ofelia"
@@ -48,11 +57,28 @@ func run(ctx context.Context, log *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	triggers := make(map[string]chan struct{}, len(jobs))
+	for _, job := range jobs {
+		triggers[job.Name] = make(chan struct{}, 1)
+	}
+	control, err := listenControl(socketPath(), triggers)
+	if err != nil {
+		return fmt.Errorf("control socket: %w", err)
+	}
+	defer control.Close()
 	var workers sync.WaitGroup
 	for _, job := range jobs {
-		workers.Go(func() { scheduler.Run(ctx, engine, job, timeout, log) })
+		trigger := triggers[job.Name]
+		workers.Go(func() { scheduler.Run(ctx, engine, job, timeout, log, trigger) })
 	}
+	log.Info("control socket ready", "path", socketPath())
+	select {
+	case <-ctx.Done():
+	case err = <-control.errors:
+	}
+	cancel()
+	control.Close()
 	workers.Wait()
 	log.Info("scheduler stopped; target containers left running")
-	return nil
+	return err
 }

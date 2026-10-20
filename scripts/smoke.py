@@ -54,6 +54,7 @@ def main():
             create()
             compose('up', '-d')
             wait_for(lambda: 'job scheduled' in logs(), 'job discovery')
+            compose('exec', '-T', 'scheduler', '/container-scheduler', 'healthcheck')
             assert not running(), 'Started before first interval'
             record = next(json.loads(line[line.index('{'):]) for line in logs().splitlines()
                           if 'job scheduled' in line)
@@ -69,12 +70,23 @@ def main():
             assert 'finished' in docker('logs', TARGET)
 
             # Recreate while scheduler is live; it must resolve the new ID by name.
+            ready_count = logs().count('control socket ready')
             compose('start', 'scheduler')
             old_id = docker('inspect', '-f', '{{.Id}}', TARGET)
             docker('rm', TARGET)
             create()
             assert docker('inspect', '-f', '{{.Id}}', TARGET) != old_id
-            wait_for(running, 'replacement container start')
+            wait_for(lambda: logs().count('control socket ready') > ready_count, 'control socket readiness')
+            # The fixture replaces every occurrence of libation with TARGET,
+            # including the job label name.
+            compose('exec', '-T', 'scheduler', '/container-scheduler', 'run-now', TARGET)
+            wait_for(lambda: 'manual run requested; timer reset' in logs(), 'targeted manual request')
+            wait_for(running, 'manual replacement container start')
+            manual = next(json.loads(line[line.index('{'):]) for line in logs().splitlines()
+                          if 'manual run requested; timer reset' in line)
+            delay = (datetime.fromisoformat(manual['next']) -
+                     datetime.fromisoformat(manual['time'])).total_seconds()
+            assert 3.5 < delay <= 4, ('manual timer reset', delay)
 
             compose('stop', 'scheduler-socket-proxy')
             wait_for(lambda: 'scheduled start failed' in logs(), 'proxy outage logging')
@@ -97,6 +109,7 @@ for method,path in [("POST","/containers/create"),("POST","/containers/other/sta
             state = json.loads(docker('inspect', sid))[0]
             assert state['RestartCount'] == 0, 'Scheduler crashed or restarted'
             assert state['Config']['User'] == '65532:65532'
+            assert state['State']['Health']['Status'] == 'healthy', state['State']['Health']
             print('Docker smoke tests passed')
         finally:
             print(compose('logs', '--no-color'))

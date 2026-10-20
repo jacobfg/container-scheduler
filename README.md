@@ -17,7 +17,7 @@ docker build -t container-scheduler:local .
 ```
 
 The runtime image is non-root, contains the static binary and CA certificates,
-and needs no writable filesystem. Docker integration runs in GitHub Actions using `python3 scripts/smoke.py`.
+and needs only the private tmpfs for its control socket. Docker integration runs in GitHub Actions using `python3 scripts/smoke.py`.
 It uses isolated container names and exercises the restricted proxy.
 
 ## Configuration
@@ -73,6 +73,61 @@ output, exit status, deletion, exec, stop, or creation is managed here.
 Run one scheduler instance and avoid other schedulers managing the same target.
 Inspect/start is not a distributed lock. SIGTERM cancels API requests and timers
 without stopping target containers. The scheduler does not report job completion.
+
+## Run now and reset the interval
+
+Trigger a named job using the CLI inside the running scheduler container:
+
+```sh
+docker compose exec -T scheduler /container-scheduler run-now libation
+# Explicitly trigger every configured job:
+docker compose exec -T scheduler /container-scheduler run-now --all
+```
+
+The name comes from `ofelia.job-run.<name>.*`, not the target container name.
+Job names must be unique across discovered containers, start with an alphanumeric
+character, and contain only alphanumerics, underscores or hyphens (dots separate
+label fields). Duplicate job names fail discovery.
+
+The command queues an immediate attempt for only the selected job and resets
+that job's next attempt to one full interval after the request is handled (four
+hours for Libation). Other jobs keep their timers. Running containers are still
+skipped; a skip or API error also resets the selected timer. There is at most one
+pending request per job; repeats while pending are coalesced. Requests wait for
+any in-flight Docker operation, bounded by its timeout.
+
+A successful CLI exit means accepted, not that Docker successfully started the
+container. Logs record `manual run requested; timer reset` with the new `next`
+timestamp, then a start, skip, or error message. Unknown job names, invalid
+arguments, or an unavailable scheduler produce a nonzero CLI exit.
+
+Control uses a Unix socket at `/run/container-scheduler/control.sock`, mode 0600;
+only the scheduler user or root can access it. No network port or additional
+Docker API permissions are used. The example Compose module supplies a 1 MiB
+private tmpfs at `/run/container-scheduler`, owned by UID/GID 65532, mode 0700.
+Add that mount when upgrading an existing read-only deployment. `SCHEDULER_SOCKET`
+can override the socket path for both daemon and CLI; its parent must be private
+and writable by the scheduler. The socket is removed on shutdown; stale sockets
+are recovered after a crash, while active sockets and regular files are protected.
+
+Versions 0.1.0 and 0.1.1 do not support run-now. There is no SIGUSR1 interface.
+
+## Healthcheck
+
+The image healthcheck runs `/container-scheduler healthcheck` every 30 seconds.
+It sends a read-only request through the same Unix socket, with a three-second
+client timeout. You can also run it manually:
+
+```sh
+docker compose exec -T scheduler /container-scheduler healthcheck
+```
+
+Healthy means job discovery completed and the control endpoint responds with at
+least one loaded job. It does not start jobs, reset timers, contact Docker, or
+claim that past jobs succeeded. Docker outages are logged by scheduled attempts
+and do not make the control healthcheck fail. This is a liveness check, not a
+per-job progress watchdog. An unhealthy Docker status alone does not restart a
+container under `restart: unless-stopped`.
 
 ## Compose integration
 

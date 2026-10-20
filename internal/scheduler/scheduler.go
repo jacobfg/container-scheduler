@@ -29,6 +29,7 @@ func Parse(sources []map[string]string, prefix string) ([]Job, error) {
 	}
 	var jobs []Job
 	targets := map[string]bool{}
+	names := map[string]bool{}
 	for _, labels := range sources {
 		enabled := labels[prefix+".enabled"]
 		if enabled == "" || enabled == "false" {
@@ -47,7 +48,7 @@ func Parse(sources []map[string]string, prefix string) ([]Job, error) {
 				continue
 			}
 			parts := strings.Split(suffix, ".")
-			if len(parts) != 3 || parts[0] != "job-run" || parts[1] == "" {
+			if len(parts) != 3 || parts[0] != "job-run" || !containerName.MatchString(parts[1]) {
 				return nil, fmt.Errorf("unsupported label %q: only job-run is supported", key)
 			}
 			switch parts[2] {
@@ -74,6 +75,10 @@ func Parse(sources []map[string]string, prefix string) ([]Job, error) {
 			if targets[fields["container"]] {
 				return nil, fmt.Errorf("multiple jobs target container %q", fields["container"])
 			}
+			if names[name] {
+				return nil, fmt.Errorf("duplicate job name %q; names must be unique across discovered containers", name)
+			}
+			names[name] = true
 			targets[fields["container"]] = true
 			jobs = append(jobs, Job{name, fields["container"], interval})
 		}
@@ -131,7 +136,7 @@ func Next(deadline, now time.Time, interval time.Duration) time.Time {
 	return now.Add(interval - now.Sub(deadline)%interval)
 }
 
-func Run(ctx context.Context, engine Engine, job Job, timeout time.Duration, log *slog.Logger) {
+func Run(ctx context.Context, engine Engine, job Job, timeout time.Duration, log *slog.Logger, trigger <-chan struct{}) {
 	next := time.Now().Add(job.Interval)
 	log.Info("job scheduled", "job", job.Name, "container", job.Container, "interval", job.Interval, "next", next)
 	timer := time.NewTimer(time.Until(next))
@@ -141,6 +146,9 @@ func Run(ctx context.Context, engine Engine, job Job, timeout time.Duration, log
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		case <-trigger:
+			next = time.Now().Add(job.Interval)
+			log.Info("manual run requested; timer reset", "job", job.Name, "container", job.Container, "next", next)
 		}
 		if ctx.Err() != nil {
 			return

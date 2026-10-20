@@ -11,4 +11,5 @@ FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /container-scheduler /container-scheduler
 USER 65532:65532
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 CMD ["/container-scheduler", "healthcheck"]
 ENTRYPOINT ["/container-scheduler"]
