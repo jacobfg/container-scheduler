@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/jacobfg/container-schedule/internal/scheduler"
+	"github.com/jacobfg/container-scheduler/internal/scheduler"
 	"github.com/moby/moby/client"
 	"log/slog"
 	"os"

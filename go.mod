@@ -1,4 +1,4 @@
-module github.com/jacobfg/container-schedule
+module github.com/jacobfg/container-scheduler
 
 go 1.27.1
 

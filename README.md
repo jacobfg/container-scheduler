@@ -1,8 +1,8 @@
-# container-schedule
+# container-scheduler
 
 A minimal Go scheduler for Libation: start an existing container every four hours,
 leave it to finish, and skip starts while it is running. This project is not a
-full Ofelia replacement. The Go module is `github.com/jacobfg/container-schedule`;
+full Ofelia replacement. The Go module is `github.com/jacobfg/container-scheduler`;
 the executable and local image are named `container-scheduler`.
 
 ## Build and check
@@ -143,7 +143,7 @@ git tag 0.1.0
 git push origin 0.1.0
 ```
 
-Successful releases publish `ghcr.io/jacobfg/container-schedule:0.1.0` and `:latest`
+Successful releases publish `ghcr.io/jacobfg/container-scheduler:0.1.0` and `:latest`
 for Linux amd64 and arm64, with OCI source, revision, and version labels. Like
 Fittools, every successful release updates `latest`, including an older version
 if it is tagged later. Use version/digest pins in production.
