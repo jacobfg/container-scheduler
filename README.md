@@ -17,8 +17,8 @@ docker build -t container-scheduler:local .
 ```
 
 The runtime image is non-root, contains the static binary and CA certificates,
-and needs no writable filesystem. Docker integration has not been run locally;
-the development environment has no Docker executable.
+and needs no writable filesystem. Docker integration runs in GitHub Actions using `python3 scripts/smoke.py`.
+It uses isolated container names and exercises the restricted proxy.
 
 ## Configuration
 
@@ -125,5 +125,27 @@ do not run these tests against the real library.
 8. Restore `@every 4h` for deployment. Observe memory and restart counts through
    several real cycles before treating the image as production-ready.
 
-Image publishing, release CI, and full Ofelia compatibility are outside the
-initial scope.
+## CI and tag-only releases
+
+Branch pushes and pull requests run formatting/module checks, shuffled race tests
+(repeated ten times), vet, amd64/arm64 image builds, and a real Docker smoke test.
+The smoke test checks delayed starts, overlap skips, shutdown, container recreation,
+proxy outage recovery, denied API writes, non-root execution, and restart count.
+
+Publishing runs **only on pushed stable version tags**, such as `0.1.0` (no `v`
+prefix), matching Fittools. The tagged commit must be an ancestor of `main` and
+must pass the complete reusable test workflow before GHCR login or publication.
+Branch pushes, PRs, and manual dispatch cannot publish. No release tag is created
+automatically.
+
+```sh
+git tag 0.1.0
+git push origin 0.1.0
+```
+
+Successful releases publish `ghcr.io/jacobfg/container-schedule:0.1.0` and `:latest`
+for Linux amd64 and arm64, with OCI source, revision, and version labels. Like
+Fittools, every successful release updates `latest`, including an older version
+if it is tagged later. Use version/digest pins in production.
+
+Full Ofelia compatibility remains outside the initial scope.

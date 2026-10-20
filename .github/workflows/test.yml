@@ -1,0 +1,51 @@
+name: Test
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Formatting and module hygiene
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      - name: Race tests and coverage
+        run: go test -race -shuffle=on -count=10 -coverprofile=coverage.out ./...
+      - run: go vet ./...
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+      - uses: docker/setup-buildx-action@v4
+      - name: Build both architectures without publishing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=/tmp/scheduler-images.tar
+          cache-from: type=gha,scope=test-image
+          cache-to: type=gha,mode=max,scope=test-image
+      - name: Load native image for smoke tests
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: container-scheduler:local
+          cache-from: type=gha,scope=test-image
+      - name: Exercise scheduler through restricted Docker proxy
+        run: python3 scripts/smoke.py
