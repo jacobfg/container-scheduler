@@ -185,6 +185,38 @@ do not run these tests against the real library.
 8. Restore `@every 4h` for deployment. Observe memory and restart counts through
    several real cycles before treating the image as production-ready.
 
+## Scheduled dependency updates
+
+The Renovate Bot workflow follows the homeserver-docker setup: a self-hosted
+Action using `.github/renovate.json5`, SHA-pinned actions, and `RENOVATE_TOKEN`.
+It runs every six hours at minute four (UTC), and can also be run from Actions
+using `workflow_dispatch`.
+It groups stable minor and patch updates to Go, the Dockerfile build image,
+and direct and indirect Go modules into one application maintenance PR. It
+updates the README Go requirement and runs `go mod tidy` to maintain `go.sum`.
+An existing open maintenance PR is refreshed; a run with no updates creates
+no PR. Major upgrades remain manual. Merging remains manual too.
+
+Before enabling the schedule, add an Actions repository secret named
+`RENOVATE_TOKEN` with a dedicated GitHub PAT authorized for this repository
+(see [Renovate authentication](https://docs.renovatebot.com/modules/platform/github/)).
+Use a token with contents and pull-request write access, and the read permissions
+Renovate requires. Do not use the workflow's default `GITHUB_TOKEN`: the dedicated
+token lets Renovate's pushes and PRs trigger the existing test workflow.
+The workflow fails with a setup message if the secret is absent. The schedule
+starts once the workflow is merged into the default branch.
+
+CI checks that `go.mod`, the Dockerfile, and this README name the same exact Go
+release, then runs the application checks below. A release published before its
+Docker image is available may temporarily fail alignment; review or rerun the
+maintenance update once both sources are available. Use the `upgrade-app` skill
+for compatibility fixes or major upgrades that need source changes.
+
+Renovate is scoped to application dependencies; Compose deployment images and
+GitHub Actions are not updated by this configuration. The Renovate action and
+engine versions in `.github/workflows/renovatebot.yml` are pinned and maintained
+manually.
+
 ## CI and tag-only releases
 
 Branch pushes and pull requests run formatting/module checks, shuffled race tests
