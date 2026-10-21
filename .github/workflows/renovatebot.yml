@@ -21,12 +21,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check Renovate credential
+      - name: Check Renovate repository access
         env:
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
         run: |
-          if [ -z "$RENOVATE_TOKEN" ]; then
+          if [ -z "$GH_TOKEN" ]; then
             echo '::error::Add the RENOVATE_TOKEN repository secret before running Renovate.'
+            exit 1
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY" --silent; then
+            echo '::error::RENOVATE_TOKEN cannot access this repository. Check its selected repositories and permissions.'
             exit 1
           fi
       - uses: renovatebot/github-action@a63d9a7bc606f7336fd20b47f2f32259a35e6213 # v46.3.9
