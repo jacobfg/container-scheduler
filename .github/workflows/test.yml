@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      - name: Check Go version alignment
+        run: python3 scripts/check-go-version.py
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
