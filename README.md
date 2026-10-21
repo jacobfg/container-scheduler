@@ -203,7 +203,11 @@ Before enabling the schedule, add an Actions repository secret named
 Use a token with contents and pull-request write access, and the read permissions
 Renovate requires. Do not use the workflow's default `GITHUB_TOKEN`: the dedicated
 token lets Renovate's pushes and PRs trigger the existing test workflow.
-The workflow fails with a setup message if the secret is absent. The schedule
+For a fine-grained PAT, explicitly include `jacobfg/container-scheduler` in
+its repository access list; a token restricted to `homeserver-docker` cannot
+access this repository. The workflow checks repository access before starting
+Renovate. For troubleshooting, enable the `debug` input on a manual run to
+include Renovate's underlying API errors in the log. The schedule
 starts once the workflow is merged into the default branch.
 
 CI checks that `go.mod`, the Dockerfile, and this README name the same exact Go
