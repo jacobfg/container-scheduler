@@ -1,7 +1,7 @@
 name: Renovate Bot
 on:
   schedule:
-    - cron: '4 */6 * * *'
+    - cron: '4 6 * * *'
   workflow_dispatch:
     inputs:
       debug:
