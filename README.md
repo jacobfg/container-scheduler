@@ -189,18 +189,19 @@ do not run these tests against the real library.
 
 The Renovate Bot workflow follows the homeserver-docker setup: a self-hosted
 Action using `.github/renovate.json5`, SHA-pinned actions, and `RENOVATE_TOKEN`.
-It runs every six hours at minute four (UTC), and can also be run from Actions
+It runs daily at 06:04 UTC, and can also be run from Actions
 using `workflow_dispatch`.
 It groups stable minor and patch updates to Go, the Dockerfile build image,
 and direct and indirect Go modules into one application maintenance PR. It
 updates the README Go requirement and runs `go mod tidy` to maintain `go.sum`.
 An existing open maintenance PR is refreshed; a run with no updates creates
-no PR. Major upgrades remain manual. Merging remains manual too.
+no PR. Major upgrades appear in the Dependency Dashboard issue and require checkbox
+approval before Renovate creates a PR. Merging remains manual.
 
 Before enabling the schedule, add an Actions repository secret named
 `RENOVATE_TOKEN` with a dedicated GitHub PAT authorized for this repository
 (see [Renovate authentication](https://docs.renovatebot.com/modules/platform/github/)).
-Use a token with contents and pull-request write access, and the read permissions
+Use a token with contents, pull-request, and Issues write access, and the read permissions
 Renovate requires. Do not use the workflow's default `GITHUB_TOKEN`: the dedicated
 token lets Renovate's pushes and PRs trigger the existing test workflow.
 For a fine-grained PAT, explicitly include `jacobfg/container-scheduler` in
@@ -245,3 +246,15 @@ Fittools, every successful release updates `latest`, including an older version
 if it is tagged later. Use version/digest pins in production.
 
 Full Ofelia compatibility remains outside the initial scope.
+
+Renovate automatically discovers `.github/renovate.json5` on the default branch.
+The workflow does not also load it as global configuration, avoiding duplicate
+custom managers. The workflow and shared update policy are identical across fittools,
+container-scheduler, and AudiobooksGreenGarminSidecar: daily at 06:04 UTC, manual debug
+runs, one grouped minor/patch PR, a Dependency Dashboard with approval required
+for major upgrades, and no automerge. Language-specific dependency managers stay
+local to each repository. Branch-update failures are promoted to errors so a
+rejected push fails the Action. The access preflight only checks visibility;
+it does not prove the token can push. A push rejected with HTTP 403 requires
+checking the token's repository selection, write permissions, and repository
+rules. Issues write access is required for the dashboard.
