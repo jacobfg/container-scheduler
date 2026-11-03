@@ -38,7 +38,7 @@ services:
       ofelia.job-run.libation.delete: 'false'
 
   scheduler-socket-proxy:
-    image: wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002
+    image: docker.io/wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002
     restart: unless-stopped
     user: '0:0'
     read_only: true

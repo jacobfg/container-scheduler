@@ -3,6 +3,7 @@
   "enabledManagers": [
     "gomod",
     "dockerfile",
+    "docker-compose",
     "custom.regex"
   ],
   "dependencyDashboard": true,
@@ -14,6 +15,18 @@
     "gomodTidy"
   ],
   "packageRules": [
+    {
+      "description": "Qualify Docker Hub images that have no explicit registry",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["!/^(?:[^/]*[.:][^/]*|localhost)\\//", "!scratch"],
+      "replacementNameTemplate": "docker.io/{{{packageName}}}"
+    },
+    {
+      "description": "Keep Compose image versions under manual maintenance",
+      "matchManagers": ["docker-compose"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "enabled": false
+    },
     {
       "description": "Include indirect modules in routine maintenance",
       "matchManagers": [
@@ -47,6 +60,15 @@
       "groupSlug": "application-dependencies"
     },
     {
+      "description": "Group minor and patch updates to smoke-test images separately",
+      "matchManagers": ["custom.regex"],
+      "matchDatasources": ["docker"],
+      "matchFileNames": ["scripts/smoke.py"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "smoke-test dependencies",
+      "groupSlug": "smoke-test-dependencies"
+    },
+    {
       "description": "Leave pins, digests, replacements, and rollbacks for manual maintenance",
       "matchUpdateTypes": [
         "pin",
@@ -64,6 +86,19 @@
         "major"
       ],
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "Allow registry qualification despite the default replacement policy",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["!/^(?:[^/]*[.:][^/]*|localhost)\\//", "!scratch"],
+      "matchUpdateTypes": ["replacement"],
+      "enabled": true
+    },
+    {
+      "description": "The scheduler image is built locally, not fetched from a registry",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["container-scheduler", "docker.io/container-scheduler"],
+      "enabled": false
     }
   ],
   "customManagers": [
@@ -78,6 +113,15 @@
       "depNameTemplate": "go",
       "datasourceTemplate": "golang-version",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/smoke\\.py$/"],
+      "matchStrings": [
+        "['\"](?<depName>docker\\.io/[a-z0-9._/-]+):(?<currentValue>[a-zA-Z0-9._-]+)['\"]"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker"
     }
   ],
   "labels": [

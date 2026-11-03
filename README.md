@@ -198,6 +198,12 @@ An existing open maintenance PR is refreshed; a run with no updates creates
 no PR. Major upgrades appear in the Dependency Dashboard issue and require checkbox
 approval before Renovate creates a PR. Merging remains manual.
 
+A custom regex manager tracks the Docker Hub Alpine and Python images in
+`scripts/smoke.py`. Their minor and patch updates form a separate smoke-test
+dependencies PR; major upgrades require the same dashboard approval. Docker
+versioning preserves tag variants such as Python's `-alpine` suffix. The existing
+CI smoke test validates these updates.
+
 Before enabling the schedule, add an Actions repository secret named
 `RENOVATE_TOKEN` with a dedicated GitHub PAT authorized for this repository
 (see [Renovate authentication](https://docs.renovatebot.com/modules/platform/github/)).
@@ -217,10 +223,13 @@ Docker image is available may temporarily fail alignment; review or rerun the
 maintenance update once both sources are available. Use the `upgrade-app` skill
 for compatibility fixes or major upgrades that need source changes.
 
-Renovate is scoped to application dependencies; Compose deployment images and
-GitHub Actions are not updated by this configuration. The Renovate action and
-engine versions in `.github/workflows/renovatebot.yml` are pinned and maintained
-manually.
+Renovate qualifies Dockerfile and Compose images without an explicit registry
+using `docker.io/`, including namespaced Docker Hub images. Existing registry
+hosts are preserved. Compose image versions remain under manual maintenance;
+the locally built scheduler image is excluded from Renovate, and `scratch`
+remains Docker's special empty base. GitHub Actions are not updated by this
+configuration. The Renovate action and engine versions in
+`.github/workflows/renovatebot.yml` are pinned and maintained manually.
 
 ## CI and tag-only releases
 

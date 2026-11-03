@@ -6,7 +6,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 PATTERNS = {
     'go.mod': r'^go (\d+\.\d+\.\d+)$',
-    'Dockerfile': r'^FROM --platform=\$BUILDPLATFORM golang:(\d+\.\d+\.\d+) AS build$',
+    'Dockerfile': r'^FROM --platform=\$BUILDPLATFORM docker\.io/golang:(\d+\.\d+\.\d+) AS build$',
     'README.md': r'^Requires Go (\d+\.\d+\.\d+) or newer\.$',
 }
 
