@@ -42,15 +42,15 @@ def main():
             return compose('logs', '--no-color', 'scheduler')
 
         def create():
-            docker('create', '--name', TARGET, '--restart=no', 'docker.io/alpine:3.22',
+            docker('create', '--name', TARGET, '--restart=no', 'docker.io/alpine:3.24',
                    'sh', '-c', 'echo started; sleep 16; echo finished')
 
         def running():
             return docker('inspect', '-f', '{{.State.Running}}', TARGET) == 'true'
 
         try:
-            docker('pull', 'docker.io/alpine:3.22')
-            docker('pull', 'docker.io/python:3.13-alpine')
+            docker('pull', 'docker.io/alpine:3.24')
+            docker('pull', 'docker.io/python:3.15-alpine')
             create()
             compose('up', '-d')
             wait_for(lambda: 'job scheduled' in logs(), 'job discovery')
@@ -105,7 +105,7 @@ for method,path in [("POST","/containers/create"),("POST","/containers/other/sta
  assert r.status in (403,405), (path,r.status,r.read())
  c.close()
 '''.replace('NAME', TARGET)
-            docker('run', '--rm', '--network', 'container:' + sid, 'docker.io/python:3.13-alpine', 'python', '-c', probe)
+            docker('run', '--rm', '--network', 'container:' + sid, 'docker.io/python:3.15-alpine', 'python', '-c', probe)
             state = json.loads(docker('inspect', sid))[0]
             assert state['RestartCount'] == 0, 'Scheduler crashed or restarted'
             assert state['Config']['User'] == '65532:65532'
