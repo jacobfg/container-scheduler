@@ -7,7 +7,7 @@ the executable and local image are named `container-scheduler`.
 
 ## Build and check
 
-Requires Go 1.27.3 or newer.
+Requires Go 1.27.4 or newer.
 
 ```sh
 go test -race ./...

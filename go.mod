@@ -1,6 +1,6 @@
 module github.com/jacobfg/container-scheduler
 
-go 1.27.3
+go 1.27.4
 
 require github.com/moby/moby/client v0.6.2
 
