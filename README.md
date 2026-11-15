@@ -231,22 +231,23 @@ remains Docker's special empty base. GitHub Actions are not updated by this
 configuration. The Renovate action and engine versions in
 `.github/workflows/renovatebot.yml` are pinned and maintained manually.
 
-## CI and tag-only releases
+## CI and published releases
 
 Branch pushes and pull requests run formatting/module checks, shuffled race tests
 (repeated ten times), vet, amd64/arm64 image builds, and a real Docker smoke test.
 The smoke test checks delayed starts, overlap skips, shutdown, container recreation,
 proxy outage recovery, denied API writes, non-root execution, and restart count.
 
-Publishing runs **only on pushed stable version tags**, such as `0.1.0` (no `v`
+Publishing runs **only when a stable GitHub Release is published**, such as `0.1.0` (no `v`
 prefix), matching Fittools. The tagged commit must be an ancestor of `main` and
 must pass the complete reusable test workflow before GHCR login or publication.
-Branch pushes, PRs, and manual dispatch cannot publish. No release tag is created
-automatically.
+Branch pushes, tag pushes, PRs, and manual dispatch cannot publish. No release tag
+is created automatically.
 
 ```sh
 git tag 0.1.0
 git push origin 0.1.0
+gh release create 0.1.0 --generate-notes
 ```
 
 Successful releases publish `ghcr.io/jacobfg/container-scheduler:0.1.0` and `:latest`
@@ -267,3 +268,10 @@ rejected push fails the Action. The access preflight only checks visibility;
 it does not prove the token can push. A push rejected with HTTP 403 requires
 checking the token's repository selection, write permissions, and repository
 rules. Issues write access is required for the dashboard.
+
+
+For Go updates, Renovate installs a compatible Go binary and runs
+`env GOTOOLCHAIN=auto go mod tidy` once per update branch, committing `go.mod` and
+`go.sum` together. The command is explicitly allowlisted in the self-hosted
+workflow. CI runs tidy using the Go release declared in `go.mod` and rejects stale
+module files. An unchanged checksum file needs no artificial update.

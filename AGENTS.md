@@ -12,7 +12,7 @@ and configuration before changing it.
 - `compose/scheduler.yml`: example deployment and restricted Docker proxy.
 - `scripts/smoke.py`: isolated Docker integration test.
 - `.github/workflows/test.yml`: authoritative CI checks.
-- `.github/workflows/publish.yml`: stable-tag-only image publication.
+- `.github/workflows/publish.yml`: published-release-only image publication.
 
 Preserve delayed first runs, overlap skipping, cancellation, and manual timer
 resets. The scheduler starts existing containers; it does not create, stop,
@@ -50,4 +50,4 @@ needed by the upgrade and add regression tests for changed behavior.
 
 PRs should explain the change, version transitions, and validation results.
 Preserve unrelated working-tree changes. Creating an upgrade PR does not include
-merging, deployment, or release tagging: pushing a stable tag publishes images.
+merging, deployment, or release tagging: publishing a stable GitHub Release publishes images.

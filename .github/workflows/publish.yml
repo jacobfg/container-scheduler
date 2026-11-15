@@ -1,13 +1,12 @@
 name: Publish container image
 on:
-  push:
-    tags:
-      - '[0-9]*.[0-9]*.[0-9]*'
+  release:
+    types: [published]
 permissions:
   contents: read
 jobs:
   release:
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -16,11 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.release.tag_name }}
           fetch-depth: 0
       - name: Validate release tag and main ancestry
         id: release
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo '::error::Use a stable semantic version such as 0.1.0, without a v prefix.'
@@ -35,7 +35,7 @@ jobs:
     uses: ./.github/workflows/test.yml
   publish:
     needs: [release, test]
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
